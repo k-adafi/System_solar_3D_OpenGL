@@ -7,6 +7,7 @@ import math
 import time
 import os  # Ajout de l'import manquant
 
+
 print("Lancement de l'application...")
 
 class CelestialBody:
@@ -83,11 +84,16 @@ class CelestialBody:
         
         glPopMatrix()
 
+
+
 def load_skybox_texture(path):
-    """Charge la texture de fond (skybox)"""
+    """Charge uniquement la texture des étoiles, ignore les autres"""
+    if "2k_stars_milky_way" not in path:
+        return None  # Ne charge pas les autres textures
+        
     try:
-        img = Image.open(path)
-        img_data = np.array(img.convert("RGB"), dtype=np.uint8)
+        img = Image.open(path).convert("RGB")
+        img_data = np.array(img, dtype=np.uint8)
         texture_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture_id)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
@@ -96,8 +102,8 @@ def load_skybox_texture(path):
                     0, GL_RGB, GL_UNSIGNED_BYTE, img_data)
         return texture_id
     except Exception as e:
-        print(f"Erreur de chargement du fond cosmique : {e}")
-        return None 
+        print(f"Erreur de chargement de la texture des étoiles : {e}")
+        return None
     
     
 class SolarSystem:
@@ -110,6 +116,7 @@ class SolarSystem:
         
         # Charger la texture du ciel (avec vérification)
         skybox_path = os.path.join(texture_dir, "2k_stars_milky_way.jpg")
+        self.skybox_path = skybox_path  # Stocker le chemin pour référence ultérieure
         if os.path.exists(skybox_path):
             self.skybox_texture = load_skybox_texture(skybox_path)
         else:
@@ -138,7 +145,7 @@ class SolarSystem:
             except Exception as e:
                 print(f"Erreur lors du chargement de la texture des anneaux: {e}")
         
-         # Configuration des planètes avec des paramètres ajustés pour un meilleur mouvement
+        # Configuration des planètes avec des paramètres ajustés pour un meilleur mouvement
         self.sun = CelestialBody(
             "Sun", 0, 0, 25, 2.0, (1.0, 0.8, 0.0), 
             texture_path=os.path.join(texture_dir, "2k_sun.jpg")
@@ -152,7 +159,7 @@ class SolarSystem:
         
         self.venus = CelestialBody(
             "Venus", 7, 225, 243, 0.6, (0.9, 0.7, 0.2),
-            texture_path=os.path.join(texture_dir, "2k_venus.jpg")
+            texture_path=os.path.join(texture_dir, "2k_venus_surface.jpg")
         )
         
         self.earth = CelestialBody(
@@ -214,7 +221,7 @@ class SolarSystem:
         
         self.pluto = CelestialBody(
             "Pluto", 35, 90560, 6.39, 0.2, (0.8, 0.6, 0.4),
-            texture_path=os.path.join(texture_dir, "2k_pluto.jpg"),
+            texture_path=os.path.join(texture_dir, "2k_pluton.jpeg"),
             moons=[
                 CelestialBody("Charon", 0.4, 6.387, 6.387, 0.1, (0.7, 0.7, 0.7))
             ]
@@ -293,27 +300,29 @@ class SolarSystem:
         
         glEnable(GL_LIGHTING)
         
+        
     def draw_skybox(self):
-        """Dessine le fond cosmique comme une sphère géante"""
+        """Dessine uniquement le fond d'étoiles"""
         if not hasattr(self, 'skybox_texture') or not self.skybox_texture:
             return
 
-        glDisable(GL_LIGHTING)  # Désactive l'éclairage pour le fond
+        glDisable(GL_LIGHTING)
         glEnable(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, self.skybox_texture)
         
-        # Dessine une sphère inversée (normales vers l'intérieur)
         quad = gluNewQuadric()
         gluQuadricTexture(quad, GL_TRUE)
         gluQuadricOrientation(quad, GLU_INSIDE)
-        gluSphere(quad, 1000, 64, 64)  # Taille très grande pour englober la scène
+        gluSphere(quad, 1000, 64, 64)
         gluDeleteQuadric(quad)
         
         glDisable(GL_TEXTURE_2D)
-        glEnable(GL_LIGHTING)    
+        glEnable(GL_LIGHTING) 
+        
+        
 
 # Variables globales
-camera_distance = 30
+camera_distance = 80
 camera_angle = 0
 camera_height = 5
 camera_x = 0
@@ -325,13 +334,26 @@ mouse_x = 0
 mouse_y = 0
 solar_system = None
 
+# Commande par souris
 def mouse(button, state, x, y):
-    global left_button_pressed, right_button_pressed, mouse_x, mouse_y, camera_distance
+    global left_button_pressed, right_button_pressed, mouse_x, mouse_y, camera_distance, selected_body
     
     mouse_x, mouse_y = x, y
+    y = glutGet(GLUT_WINDOW_HEIGHT) - y  # Conversion coordonnées OpenGL
     
     if button == GLUT_LEFT_BUTTON:
         left_button_pressed = (state == GLUT_DOWN)
+        
+        if state == GLUT_DOWN:
+            # Vérifier si on a cliqué sur un bouton
+            for btn in planet_buttons:
+                if (btn['x'] <= x <= btn['x'] + btn['width'] and 
+                    btn['y'] <= y <= btn['y'] + btn['height']):
+                    selected_body = btn['body']
+                    break
+            else:
+                selected_body = None
+                
     elif button == GLUT_RIGHT_BUTTON:
         right_button_pressed = (state == GLUT_DOWN)
     elif button == 3:  # Roulette vers le haut (zoom avant)
@@ -340,9 +362,11 @@ def mouse(button, state, x, y):
         camera_distance += 2
     
     glutPostRedisplay()
+    
+    
 
 def motion(x, y):
-    global camera_angle, camera_height, mouse_x, mouse_y
+    global camera_angle, camera_height, mouse_x, mouse_y, camera_x, camera_y, camera_z
     
     dx = x - mouse_x
     dy = y - mouse_y
@@ -355,7 +379,7 @@ def motion(x, y):
         camera_y -= dy * 0.01
     
     mouse_x, mouse_y = x, y
-    glutPostRedisplay()        
+    glutPostRedisplay()       
 
 def display():
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -379,8 +403,52 @@ def display():
     # Affiche les infos
     show_info()
     
+    
+    # Dessiner les boutons
+    draw_buttons()
+    
+    # Afficher le nom du corps sélectionné au-dessus de l'objet
+    if selected_body:
+        glDisable(GL_LIGHTING)
+        glColor3f(1, 1, 1)
+        
+        # Positionner la caméra pour le texte 3D
+        glMatrixMode(GL_PROJECTION)
+        glPushMatrix()
+        glLoadIdentity()
+        gluPerspective(45, glutGet(GLUT_WINDOW_WIDTH)/glutGet(GLUT_WINDOW_HEIGHT), 0.1, 1000)
+        
+        glMatrixMode(GL_MODELVIEW)
+        glPushMatrix()
+        glLoadIdentity()
+        
+        # Positionner le texte au-dessus du corps
+        glPushMatrix()
+        if selected_body == solar_system.sun:
+            glTranslatef(0, selected_body.radius + 0.5, 0)
+        else:
+            glRotatef(selected_body.orbit_angle, 0, 1, 0)
+            glTranslatef(selected_body.distance, selected_body.radius + 0.5, 0)
+        
+        # Orientation face à la caméra
+        glRotatef(-camera_angle, 0, 1, 0)
+        glRotatef(-camera_height, 1, 0, 0)
+        glScalef(0.002, 0.002, 0.002)
+        
+        # Dessiner le texte
+        for i, char in enumerate(selected_body.name):
+            glutStrokeCharacter(GLUT_STROKE_ROMAN, ord(char))
+        glPopMatrix()
+        
+        glPopMatrix()
+        glMatrixMode(GL_PROJECTION)
+        glPopMatrix()
+        glMatrixMode(GL_MODELVIEW)
+        glEnable(GL_LIGHTING)
+    
     glutSwapBuffers()
 
+#Affichage des information pour l'utilisateur
 def show_info():
     glDisable(GL_LIGHTING)
     glColor3f(1, 1, 1)
@@ -395,24 +463,23 @@ def show_info():
     glPushMatrix()
     glLoadIdentity()
     
-    # Display text
+    # Display text (déplacé en haut à gauche)
     text_lines = [
         "Système Solaire 3D - Contrôles:",
         "Zoom: Molette souris ou +/-",
         "Rotation: Clic gauche + déplacement",
         "Déplacement: Clic droit + déplacement",
-        "Vues prédéfinies:",
-        "h - Haut | b - Bas | g - Gauche",
-        "d - Droite | f - Face | r - Arrière",
-        "P - Pause | Q - Quitter"
+        "Vues prédéfinies: h (haut), b (bas)",
+        "g (gauche), d (droite), f (face)",
+        "r (arrière), P (pause), Q (quitter)"
     ]
     
-    y_pos = 30
+    y_pos = glutGet(GLUT_WINDOW_HEIGHT) - 30  # Commence en haut
     for line in text_lines:
         glRasterPos2f(10, y_pos)
         for char in line:
             glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
-        y_pos += 15
+        y_pos -= 15  # Descend pour chaque ligne
     
     # Restore previous matrices
     glPopMatrix()
@@ -420,25 +487,125 @@ def show_info():
     glPopMatrix()
     glMatrixMode(GL_MODELVIEW)
     glEnable(GL_LIGHTING)
+    
+    
+# Affichage des listes de planètes
+# def show_planete_name():
+
+# Variables globales pour l'interface
+planet_buttons = []
+selected_body = None
+button_width = 100
+button_height = 30
+button_margin = 10
 
 def initialize():
+    
+    global planet_buttons
+    
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)
     glEnable(GL_COLOR_MATERIAL)
-    glClearColor(0.0, 0.0, 0.1, 1.0)
+    glClearColor(0.0, 0.0, 0.0, 0.0)  # Fond transparent (alpha=0)
     
-    # Light configuration (sun)
+    # Configuration de la lumière (soleil) - suppression des ombres
     light_position = [0.0, 0.0, 0.0, 1.0]
     glLightfv(GL_LIGHT0, GL_POSITION, light_position)
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 0.9, 1.0])
-    glLightfv(GL_LIGHT0, GL_AMBIENT, [0.1, 0.1, 0.1, 1.0])
-    glLightfv(GL_LIGHT0, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, [1.0, 1.0, 1.0, 1.0])  # Lumière blanche uniforme
+    glLightfv(GL_LIGHT0, GL_AMBIENT, [0.5, 0.5, 0.5, 1.0])  # Ambiance plus claire
+    glLightfv(GL_LIGHT0, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])  # Pas de spéculaire
     
-    # Material properties
-    glMaterialfv(GL_FRONT, GL_SPECULAR, [1.0, 1.0, 1.0, 1.0])
-    glMaterialfv(GL_FRONT, GL_SHININESS, [50.0])
+    # Désactivation des effets de matériau qui créent des ombres
+    glDisable(GL_LIGHT1)
+    glMaterialfv(GL_FRONT, GL_SPECULAR, [0.0, 0.0, 0.0, 1.0])
+    glMaterialfv(GL_FRONT, GL_SHININESS, [0.0])
+    
+    
+    # Créer les boutons pour chaque corps céleste
+    planet_buttons = []
+    bodies = [solar_system.sun] + solar_system.planets
+    
+    for body in bodies:
+        planet_buttons.append({
+            'name': body.name,
+            'body': body,
+            'x': 0,  # Seront calculés dans draw_buttons()
+            'y': 0,
+            'width': button_width,
+            'height': button_height
+        })
+        
+        # Ajouter aussi les lunes
+        for moon in body.moons:
+            planet_buttons.append({
+                'name': moon.name,
+                'body': moon,
+                'x': 0,
+                'y': 0,
+                'width': button_width,
+                'height': button_height
+            })
 
+
+def draw_buttons():
+    glDisable(GL_LIGHTING)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT))
+    
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+    
+    window_width = glutGet(GLUT_WINDOW_WIDTH)
+    window_height = glutGet(GLUT_WINDOW_HEIGHT)
+    
+    # Position de départ (bas droite)
+    x = window_width - button_width - button_margin
+    y = button_margin
+    
+    for button in planet_buttons:
+        button['x'] = x
+        button['y'] = y
+        
+        # Dessiner le bouton
+        if selected_body == button['body']:
+            glColor3f(0.3, 0.3, 0.8)  # Bouton sélectionné (bleu)
+        else:
+            glColor3f(0.2, 0.2, 0.2)  # Bouton normal (gris foncé)
+            
+        glBegin(GL_QUADS)
+        glVertex2f(x, y)
+        glVertex2f(x + button_width, y)
+        glVertex2f(x + button_width, y + button_height)
+        glVertex2f(x, y + button_height)
+        glEnd()
+        
+        # Texte du bouton - TOUJOURS BLANC (1,1,1 = blanc)
+        glColor3f(1, 1, 1)  # <-- Ceci force le texte en blanc
+        text = button['body'].name
+        text_width = sum(glutBitmapWidth(GLUT_BITMAP_9_BY_15, ord(c)) for c in text)
+        text_x = x + (button_width - text_width) / 2
+        glRasterPos2f(max(x + 5, text_x), y + button_height/2 - 5)
+        for char in text:
+            glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+        
+        # Passer au bouton suivant
+        x -= button_width + button_margin
+        if x < 0:
+            x = window_width - button_width - button_margin
+            y += button_height + button_margin
+    
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_LIGHTING)
+    
+
+#Touche de commande par clavier
 def keyboard(key, x, y):
     global camera_distance, camera_height, camera_angle, camera_x, camera_y, camera_z
     
@@ -503,13 +670,14 @@ def idle():
 
 # Configuration initiale
 glutInit()
-glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
+glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_ALPHA)
 glutInitWindowSize(1200, 800)
 glutCreateWindow(b"System Solar 3D")
 
 # Initialisation
-initialize()
 solar_system = SolarSystem()
+
+initialize()
 
 # Configuration des callbacks
 glutDisplayFunc(display)
