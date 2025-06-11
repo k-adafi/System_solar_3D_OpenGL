@@ -1,11 +1,13 @@
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
+from OpenGL.GLUT import GLUT_STROKE_ROMAN, GLUT_BITMAP_9_BY_15
 from PIL import Image
 import numpy as np
 import math
 import time
-import os  # Ajout de l'import manquant
+import os
+import ctypes
 
 
 print("Lancement de l'application...")
@@ -14,8 +16,8 @@ class CelestialBody:
     def __init__(self, name, distance, orbital_period, rotation_period, radius, color, texture_path=None, moons=None):
         self.name = name
         self.distance = distance  # distance from parent (AU scaled)
-        self.orbital_period = orbital_period  # Earth days
-        self.rotation_period = rotation_period  # Earth days
+        self.orbital_period = orbital_period  # Earth year (Révolution)
+        self.rotation_period = rotation_period  # Earth days (Rotation)
         self.radius = radius  # Earth radii scaled
         self.color = color
         self.texture_id = None
@@ -125,11 +127,11 @@ class SolarSystem:
         
         # Initialiser saturn_rings avant de l'utiliser
         self.saturn_rings = {
-            'inner_radius': 1.2,
-            'outer_radius': 2.0,
+            'inner_radius': 1.0,  # Augmenté pour mieux correspondre à la taille de Saturne
+            'outer_radius': 2.0,  # Augmenté pour mieux correspondre à la taille de Saturne
             'texture_id': None
         }
-        
+                
         # Charger la texture des anneaux si elle existe
         ring_texture_path = os.path.join(texture_dir, "2k_saturn_ring_alpha.png")
         if os.path.exists(ring_texture_path):
@@ -147,13 +149,13 @@ class SolarSystem:
         
         # Configuration des planètes avec des paramètres ajustés pour un meilleur mouvement
         self.sun = CelestialBody(
-            "Sun", 0, 0, 25, 2.0, (1.0, 0.8, 0.0), 
+            "Soleil", 0, 0, 25, 2.0, (1.0, 0.8, 0.0), 
             texture_path=os.path.join(texture_dir, "2k_sun.jpg")
         )
         
         # Planètes intérieures (mouvement plus rapide)
         self.mercury = CelestialBody(
-            "Mercury", 4, 88, 58.6, 0.4, (0.7, 0.7, 0.7),
+            "Mercure", 4, 88, 58.6, 0.4, (0.7, 0.7, 0.7),
             texture_path=os.path.join(texture_dir, "2k_mercury.jpg")
         )
         
@@ -163,7 +165,7 @@ class SolarSystem:
         )
         
         self.earth = CelestialBody(
-            "Earth", 10, 365.25, 1, 0.6, (0.2, 0.2, 1.0),
+            "Terre", 10, 365.25, 1, 0.6, (0.2, 0.2, 1.0),
             texture_path=os.path.join(texture_dir, "2k_earth_daymap.jpg"),
             moons=[
                 CelestialBody("Moon", 1.5, 27.3, 27.3, 0.15, (0.8, 0.8, 0.8),
@@ -193,7 +195,7 @@ class SolarSystem:
         )
         
         self.saturn = CelestialBody(
-            "Saturn", 25, 10759, 0.45, 1.0, (0.9, 0.8, 0.6),
+            "Saturne", 25, 10759, 0.45, 1.0, (0.9, 0.8, 0.6),
             texture_path=os.path.join(texture_dir, "2k_saturn.jpg"),
             moons=[
                 CelestialBody("Titan", 2.2, 15.945, 15.945, 0.15, (0.8, 0.7, 0.5)),
@@ -220,7 +222,7 @@ class SolarSystem:
         )
         
         self.pluto = CelestialBody(
-            "Pluto", 35, 90560, 6.39, 0.2, (0.8, 0.6, 0.4),
+            "Pluton", 35, 90560, 6.39, 0.2, (0.8, 0.6, 0.4),
             texture_path=os.path.join(texture_dir, "2k_pluton.jpeg"),
             moons=[
                 CelestialBody("Charon", 0.4, 6.387, 6.387, 0.1, (0.7, 0.7, 0.7))
@@ -254,7 +256,7 @@ class SolarSystem:
         for planet in self.planets:
             planet.draw()
         
-        # Special case: Saturn's rings
+        # Special case: Saturn's rings - MODIFIÉ
         glPushMatrix()
         # Position at Saturn's location
         glRotatef(self.saturn.orbit_angle, 0, 1, 0)
@@ -266,12 +268,14 @@ class SolarSystem:
             glEnable(GL_BLEND)
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             
-            glBegin(GL_QUADS)
-            glTexCoord2f(0, 0); glVertex3f(-self.saturn_rings['outer_radius'], 0, -self.saturn_rings['outer_radius'])
-            glTexCoord2f(1, 0); glVertex3f(self.saturn_rings['outer_radius'], 0, -self.saturn_rings['outer_radius'])
-            glTexCoord2f(1, 1); glVertex3f(self.saturn_rings['outer_radius'], 0, self.saturn_rings['outer_radius'])
-            glTexCoord2f(0, 1); glVertex3f(-self.saturn_rings['outer_radius'], 0, self.saturn_rings['outer_radius'])
-            glEnd()
+            # Dessiner un anneau avec un disque troué
+            quad = gluNewQuadric()
+            gluQuadricTexture(quad, GL_TRUE)
+            gluQuadricOrientation(quad, GLU_OUTSIDE)
+            glRotatef(90, 1, 0, 0)  # Orienter horizontalement
+            gluDisk(quad, self.saturn_rings['inner_radius'], 
+                    self.saturn_rings['outer_radius'], 64, 1)
+            gluDeleteQuadric(quad)
             
             glDisable(GL_BLEND)
             glDisable(GL_TEXTURE_2D)
@@ -339,17 +343,21 @@ def mouse(button, state, x, y):
     global left_button_pressed, right_button_pressed, mouse_x, mouse_y, camera_distance, selected_body
     
     mouse_x, mouse_y = x, y
-    y = glutGet(GLUT_WINDOW_HEIGHT) - y  # Conversion coordonnées OpenGL
     
     if button == GLUT_LEFT_BUTTON:
         left_button_pressed = (state == GLUT_DOWN)
         
         if state == GLUT_DOWN:
+            # Conversion correcte des coordonnées Y pour la détection des boutons
+            window_height = glutGet(GLUT_WINDOW_HEIGHT)
+            gl_y = window_height - y  # Conversion coordonnées OpenGL
+            
             # Vérifier si on a cliqué sur un bouton
             for btn in planet_buttons:
                 if (btn['x'] <= x <= btn['x'] + btn['width'] and 
-                    btn['y'] <= y <= btn['y'] + btn['height']):
+                    btn['y'] <= gl_y <= btn['y'] + btn['height']):
                     selected_body = btn['body']
+                    print(f"Sélectionné: {selected_body.name}")  # Debug
                     break
             else:
                 selected_body = None
@@ -357,12 +365,11 @@ def mouse(button, state, x, y):
     elif button == GLUT_RIGHT_BUTTON:
         right_button_pressed = (state == GLUT_DOWN)
     elif button == 3:  # Roulette vers le haut (zoom avant)
-        camera_distance = max(10, camera_distance - 2)
+        camera_distance = max(5, camera_distance - 2)
     elif button == 4:  # Roulette vers le bas (zoom arrière)
         camera_distance += 2
     
     glutPostRedisplay()
-    
     
 
 def motion(x, y):
@@ -405,28 +412,21 @@ def display():
     
     
     # Dessiner les boutons
-    draw_buttons()
+
     
+
     # Afficher le nom du corps sélectionné au-dessus de l'objet
     if selected_body:
         glDisable(GL_LIGHTING)
         glColor3f(1, 1, 1)
         
-        # Positionner la caméra pour le texte 3D
-        glMatrixMode(GL_PROJECTION)
+        # Positionner le texte
         glPushMatrix()
-        glLoadIdentity()
-        gluPerspective(45, glutGet(GLUT_WINDOW_WIDTH)/glutGet(GLUT_WINDOW_HEIGHT), 0.1, 1000)
         
-        glMatrixMode(GL_MODELVIEW)
-        glPushMatrix()
-        glLoadIdentity()
-        
-        # Positionner le texte au-dessus du corps
-        glPushMatrix()
         if selected_body == solar_system.sun:
-            glTranslatef(0, selected_body.radius + 0.5, 0)
+            glTranslatef(0, selected_body.radius + 1, 0)
         else:
+            # Pour les planètes et lunes
             glRotatef(selected_body.orbit_angle, 0, 1, 0)
             glTranslatef(selected_body.distance, selected_body.radius + 0.5, 0)
         
@@ -436,14 +436,10 @@ def display():
         glScalef(0.002, 0.002, 0.002)
         
         # Dessiner le texte
-        for i, char in enumerate(selected_body.name):
+        for char in selected_body.name:
             glutStrokeCharacter(GLUT_STROKE_ROMAN, ord(char))
         glPopMatrix()
         
-        glPopMatrix()
-        glMatrixMode(GL_PROJECTION)
-        glPopMatrix()
-        glMatrixMode(GL_MODELVIEW)
         glEnable(GL_LIGHTING)
     
     glutSwapBuffers()
@@ -463,23 +459,68 @@ def show_info():
     glPushMatrix()
     glLoadIdentity()
     
-    # Display text (déplacé en haut à gauche)
+    window_width = glutGet(GLUT_WINDOW_WIDTH)
+    window_height = glutGet(GLUT_WINDOW_HEIGHT)
+    
+    # Display controls at top left
     text_lines = [
         "Système Solaire 3D - Contrôles:",
         "Zoom: Molette souris ou +/-",
-        "Rotation: Clic gauche + déplacement",
-        "Déplacement: Clic droit + déplacement",
-        "Vues prédéfinies: h (haut), b (bas)",
-        "g (gauche), d (droite), f (face)",
-        "r (arrière), P (pause), Q (quitter)"
+        "Rotation: Clic gauche + déplacement de la souris",
+        "Déplacement: Clic droit + déplacement de la souris",
+        "Vues prédéfinies: h (haut), b (bas), g (gauche), d (droite), f (face), r (arrière)",
+        "P (pause), Q (quitter)"
     ]
     
-    y_pos = glutGet(GLUT_WINDOW_HEIGHT) - 30  # Commence en haut
+    y_pos = window_height - 20  # Commence en haut
     for line in text_lines:
         glRasterPos2f(10, y_pos)
         for char in line:
             glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
         y_pos -= 15  # Descend pour chaque ligne
+    
+    # Display planet shortcuts at bottom
+    planet_shortcuts = [
+        ("Soleil: Alt+S", solar_system.sun),
+        ("Mercure: Alt+M", solar_system.mercury),
+        ("Venus: Alt+V", solar_system.venus),
+        ("Terre: Alt+T", solar_system.earth),
+        ("Mars: Shift+M", solar_system.mars),
+        ("Jupiter: Alt+J", solar_system.jupiter),
+        ("Saturne: Shift+S", solar_system.saturn),
+        ("Uranus: Alt+U", solar_system.uranus),
+        ("Neptune: Alt+N", solar_system.neptune),
+        ("Pluton: Shift+N", solar_system.pluto)
+    ]
+    
+    # Calculate starting position for centered text
+    total_width = 0
+    for text, _ in planet_shortcuts:
+        # Convertir le texte en tableau de caractères (bytes) pour glutBitmapLength
+        text_bytes = (ctypes.c_ubyte * len(text))(*[ord(c) for c in text])
+        total_width += glutBitmapLength(GLUT_BITMAP_9_BY_15, text_bytes)
+    total_width += len(planet_shortcuts) * 10  # Ajouter l'espacement
+    
+    start_x = (window_width - total_width) // 4
+    
+    y_bottom = 20  # Position en bas
+    x_pos = start_x
+    
+    for text, body in planet_shortcuts:
+        # Change color if this is the selected body
+        if selected_body == body:
+            glColor3f(0, 1, 1)  # Cyan for selected
+        else:
+            glColor3f(1, 1, 1)  # White for others
+            
+        glRasterPos2f(x_pos, y_bottom)
+        for char in text:
+            glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
+        
+        # Add spacing between items
+        text_bytes = (ctypes.c_ubyte * len(text))(*[ord(c) for c in text])
+        text_width = glutBitmapLength(GLUT_BITMAP_9_BY_15, text_bytes)
+        x_pos += text_width + 12  # 12px spacing
     
     # Restore previous matrices
     glPopMatrix()
@@ -494,10 +535,19 @@ def show_info():
 
 # Variables globales pour l'interface
 planet_buttons = []
-selected_body = None
-button_width = 100
-button_height = 30
-button_margin = 10
+# Variables globales (modifiées)
+camera_distance = 80
+camera_angle = 0
+camera_height = 5
+camera_x = 0
+camera_y = 0
+camera_z = 0
+left_button_pressed = False
+right_button_pressed = False
+mouse_x = 0
+mouse_y = 0
+solar_system = None
+selected_body = None  # Pour suivre la sélection actuelle
 
 def initialize():
     
@@ -522,95 +572,15 @@ def initialize():
     glMaterialfv(GL_FRONT, GL_SHININESS, [0.0])
     
     
-    # Créer les boutons pour chaque corps céleste
-    planet_buttons = []
-    bodies = [solar_system.sun] + solar_system.planets
-    
-    for body in bodies:
-        planet_buttons.append({
-            'name': body.name,
-            'body': body,
-            'x': 0,  # Seront calculés dans draw_buttons()
-            'y': 0,
-            'width': button_width,
-            'height': button_height
-        })
-        
-        # Ajouter aussi les lunes
-        for moon in body.moons:
-            planet_buttons.append({
-                'name': moon.name,
-                'body': moon,
-                'x': 0,
-                'y': 0,
-                'width': button_width,
-                'height': button_height
-            })
 
-
-def draw_buttons():
-    glDisable(GL_LIGHTING)
-    glMatrixMode(GL_PROJECTION)
-    glPushMatrix()
-    glLoadIdentity()
-    gluOrtho2D(0, glutGet(GLUT_WINDOW_WIDTH), 0, glutGet(GLUT_WINDOW_HEIGHT))
-    
-    glMatrixMode(GL_MODELVIEW)
-    glPushMatrix()
-    glLoadIdentity()
-    
-    window_width = glutGet(GLUT_WINDOW_WIDTH)
-    window_height = glutGet(GLUT_WINDOW_HEIGHT)
-    
-    # Position de départ (bas droite)
-    x = window_width - button_width - button_margin
-    y = button_margin
-    
-    for button in planet_buttons:
-        button['x'] = x
-        button['y'] = y
-        
-        # Dessiner le bouton
-        if selected_body == button['body']:
-            glColor3f(0.3, 0.3, 0.8)  # Bouton sélectionné (bleu)
-        else:
-            glColor3f(0.2, 0.2, 0.2)  # Bouton normal (gris foncé)
-            
-        glBegin(GL_QUADS)
-        glVertex2f(x, y)
-        glVertex2f(x + button_width, y)
-        glVertex2f(x + button_width, y + button_height)
-        glVertex2f(x, y + button_height)
-        glEnd()
-        
-        # Texte du bouton - TOUJOURS BLANC (1,1,1 = blanc)
-        glColor3f(1, 1, 1)  # <-- Ceci force le texte en blanc
-        text = button['body'].name
-        text_width = sum(glutBitmapWidth(GLUT_BITMAP_9_BY_15, ord(c)) for c in text)
-        text_x = x + (button_width - text_width) / 2
-        glRasterPos2f(max(x + 5, text_x), y + button_height/2 - 5)
-        for char in text:
-            glutBitmapCharacter(GLUT_BITMAP_9_BY_15, ord(char))
-        
-        # Passer au bouton suivant
-        x -= button_width + button_margin
-        if x < 0:
-            x = window_width - button_width - button_margin
-            y += button_height + button_margin
-    
-    glPopMatrix()
-    glMatrixMode(GL_PROJECTION)
-    glPopMatrix()
-    glMatrixMode(GL_MODELVIEW)
-    glEnable(GL_LIGHTING)
-    
 
 #Touche de commande par clavier
 def keyboard(key, x, y):
-    global camera_distance, camera_height, camera_angle, camera_x, camera_y, camera_z
+    global camera_distance, camera_height, camera_angle, camera_x, camera_y, camera_z, selected_body
     
     key = key.decode('utf-8').lower()
     
+    # Commandes de zoom
     if key == '+':
         camera_distance = max(10, camera_distance - 2)
     elif key == '-':
@@ -619,6 +589,38 @@ def keyboard(key, x, y):
         os._exit(0)
     elif key == 'p':
         solar_system.time_scale = 0 if solar_system.time_scale > 0 else 0.5
+    
+    # Commandes de sélection des corps célestes
+    elif key == 's' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+S pour Soleil
+        selected_body = solar_system.sun
+        center_camera_on_body(selected_body)
+    elif key == 'm' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+M pour Mercure
+        selected_body = solar_system.mercury
+        center_camera_on_body(selected_body)
+    elif key == 'v' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+V pour Venus
+        selected_body = solar_system.venus
+        center_camera_on_body(selected_body)
+    elif key == 't' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+T pour Terre
+        selected_body = solar_system.earth
+        center_camera_on_body(selected_body)
+    elif key == 'm' and glutGetModifiers() == GLUT_ACTIVE_SHIFT:  # Shift+M pour Mars
+        selected_body = solar_system.mars
+        center_camera_on_body(selected_body)
+    elif key == 'j' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+J pour Jupiter
+        selected_body = solar_system.jupiter
+        center_camera_on_body(selected_body)
+    elif key == 's' and glutGetModifiers() == GLUT_ACTIVE_SHIFT:  # Shift+S pour Saturne
+        selected_body = solar_system.saturn
+        center_camera_on_body(selected_body)
+    elif key == 'u' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+U pour Uranus
+        selected_body = solar_system.uranus
+        center_camera_on_body(selected_body)
+    elif key == 'n' and glutGetModifiers() == GLUT_ACTIVE_ALT:  # Alt+N pour Neptune
+        selected_body = solar_system.neptune
+        center_camera_on_body(selected_body)
+    elif key == 'n' and glutGetModifiers() == GLUT_ACTIVE_SHIFT:  # Shift+N pour Pluton
+        selected_body = solar_system.pluto
+        center_camera_on_body(selected_body)
     
     # Vues prédéfinies
     elif key == 'h':  # Vue de haut
@@ -653,6 +655,25 @@ def keyboard(key, x, y):
         camera_x = camera_y = camera_z = 0
     
     glutPostRedisplay()
+
+def center_camera_on_body(body):
+    """Centre la caméra sur le corps céleste spécifié"""
+    global camera_x, camera_z, camera_distance
+    
+    if body == solar_system.sun:
+        camera_x = 0
+        camera_z = 0
+        camera_distance = 30  # Distance de vue pour le soleil
+    else:
+        # Calculer la position orbitale actuelle
+        angle_rad = math.radians(body.orbit_angle)
+        camera_x = body.distance * math.cos(angle_rad)
+        camera_z = body.distance * math.sin(angle_rad)
+        camera_distance = 5  # Distance de vue pour les planètes
+    
+    # Ajuster la hauteur pour une bonne vue
+    global camera_height
+    camera_height = 5
 
 def reshape(width, height):
     if height == 0:
