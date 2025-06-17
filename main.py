@@ -1,3 +1,4 @@
+# Importation des librairies
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
@@ -12,6 +13,7 @@ import ctypes
 
 print("Lancement de l'application...")
 
+ # Class pour le corps des celèstes
 class CelestialBody:
     def __init__(self, name, distance, orbital_period, rotation_period, radius, color, texture_path=None, moons=None):
         self.name = name
@@ -29,7 +31,8 @@ class CelestialBody:
         # Current angles
         self.orbit_angle = np.random.uniform(0, 360)  # Start with random position
         self.rotation_angle = 0
-        
+    
+    # Fonction pour charger les textures dans fichier    
     def load_texture(self, texture_path):
         try:
             img = Image.open(texture_path).convert("RGB")
@@ -56,6 +59,7 @@ class CelestialBody:
         for moon in self.moons:
             moon.update(time_scale)
     
+    # Fonction pour dessiner les planètes, solei, lune et orbites
     def draw(self):
         glPushMatrix()
         
@@ -87,7 +91,7 @@ class CelestialBody:
         glPopMatrix()
 
 
-
+# Fonction pour le chargement des textures étoiles à l'arrière-plan
 def load_skybox_texture(path):
     """Charge uniquement la texture des étoiles, ignore les autres"""
     if "2k_stars_milky_way" not in path:
@@ -107,7 +111,7 @@ def load_skybox_texture(path):
         print(f"Erreur de chargement de la texture des étoiles : {e}")
         return None
     
-    
+# Class pour le système solaire    
 class SolarSystem:
     def __init__(self):
         # Vérifier si le dossier Texture existe
@@ -142,7 +146,7 @@ class SolarSystem:
                 glBindTexture(GL_TEXTURE_2D, self.saturn_rings['texture_id'])
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.size[0], img.size[1], 
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.size[0], img.size[4], 
                              0, GL_RGBA, GL_UNSIGNED_BYTE, img_data)
             except Exception as e:
                 print(f"Erreur lors du chargement de la texture des anneaux: {e}")
@@ -153,38 +157,38 @@ class SolarSystem:
             texture_path=os.path.join(texture_dir, "2k_sun.jpg")
         )
         
-        # Planètes intérieures (mouvement plus rapide)
+        # Planètes intérieures
         self.mercury = CelestialBody(
-            "Mercure", 4, 88, 58.6, 0.4, (0.7, 0.7, 0.7),
+            "Mercure", 4, 10, 70, 0.4, (0.7, 0.7, 0.7),
             texture_path=os.path.join(texture_dir, "2k_mercury.jpg")
         )
         
         self.venus = CelestialBody(
-            "Venus", 7, 225, 243, 0.6, (0.9, 0.7, 0.2),
+            "Venus", 7, 120, 243, 0.6, (0.9, 0.7, 0.2),
             texture_path=os.path.join(texture_dir, "2k_venus_surface.jpg")
         )
         
         self.earth = CelestialBody(
-            "Terre", 10, 365.25, 1, 0.6, (0.2, 0.2, 1.0),
+            "Terre", 10, 365, 4, 0.6, (0.2, 0.2, 1.0),
             texture_path=os.path.join(texture_dir, "2k_earth_daymap.jpg"),
             moons=[
-                CelestialBody("Moon", 1.5, 27.3, 27.3, 0.15, (0.8, 0.8, 0.8),
+                CelestialBody("Moon", 1.5, 7.3, 27.3, 0.15, (0.8, 0.8, 0.8),
                              texture_path=os.path.join(texture_dir, "2k_moon.jpg"))
             ]
         )
         
         self.mars = CelestialBody(
-            "Mars", 15, 687, 1.03, 0.5, (0.8, 0.4, 0.1),
+            "Mars", 15, 687, 3, 0.5, (0.8, 0.4, 0.1),
             texture_path=os.path.join(texture_dir, "2k_mars.jpg"),
             moons=[
-                CelestialBody("Phobos", 0.8, 0.319, 0.319, 0.05, (0.6, 0.6, 0.6)),
-                CelestialBody("Deimos", 1.2, 1.262, 1.262, 0.03, (0.6, 0.6, 0.6))
+                CelestialBody("Phobos", 0.8, 3.319, 3.319, 0.05, (0.6, 0.6, 0.6)),
+                CelestialBody("Deimos", 1.2, 5.262, 5.262, 0.03, (0.6, 0.6, 0.6))
             ]
         )
         
-        # Planètes extérieures avec des paramètres ajustés pour un meilleur mouvement
+        # Planètes extérieures
         self.jupiter = CelestialBody(
-            "Jupiter", 20, 4333, 0.41, 1.2, (0.8, 0.6, 0.4),
+            "Jupiter", 20, 433, 3, 1.2, (0.8, 0.6, 0.4),
             texture_path=os.path.join(texture_dir, "2k_jupiter.jpg"),
             moons=[
                 CelestialBody("Io", 1.5, 1.769, 1.769, 0.1, (0.9, 0.8, 0.5)),
@@ -195,7 +199,7 @@ class SolarSystem:
         )
         
         self.saturn = CelestialBody(
-            "Saturne", 25, 10759, 0.45, 1.0, (0.9, 0.8, 0.6),
+            "Saturne", 25, 10759, 3, 1.0, (0.9, 0.8, 0.6),
             texture_path=os.path.join(texture_dir, "2k_saturn.jpg"),
             moons=[
                 CelestialBody("Titan", 2.2, 15.945, 15.945, 0.15, (0.8, 0.7, 0.5)),
@@ -205,7 +209,7 @@ class SolarSystem:
         )
         
         self.uranus = CelestialBody(
-            "Uranus", 28, 30687, 0.72, 0.7, (0.5, 0.8, 0.9),
+            "Uranus", 28, 30687, 3, 0.7, (0.5, 0.8, 0.9),
             texture_path=os.path.join(texture_dir, "2k_uranus.jpg"),
             moons=[
                 CelestialBody("Titania", 0.9, 8.706, 8.706, 0.08, (0.8, 0.8, 0.8)),
@@ -214,7 +218,7 @@ class SolarSystem:
         )
 
         self.neptune = CelestialBody(
-            "Neptune", 30, 60190, 0.67, 0.7, (0.2, 0.3, 0.9),
+            "Neptune", 30, 60190, 3, 0.7, (0.2, 0.3, 0.9),
             texture_path=os.path.join(texture_dir, "2k_neptune.jpg"),
             moons=[
                 CelestialBody("Triton", 1.2, 5.877, 5.877, 0.1, (0.7, 0.8, 0.9))
@@ -410,10 +414,6 @@ def display():
     # Affiche les infos
     show_info()
     
-    
-    # Dessiner les boutons
-
-    
 
     # Afficher le nom du corps sélectionné au-dessus de l'objet
     if selected_body:
@@ -444,7 +444,7 @@ def display():
     
     glutSwapBuffers()
 
-#Affichage des information pour l'utilisateur
+# Affichage des information pour l'utilisateur
 def show_info():
     glDisable(GL_LIGHTING)
     glColor3f(1, 1, 1)
@@ -693,7 +693,7 @@ def idle():
 glutInit()
 glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH | GLUT_ALPHA)
 glutInitWindowSize(1200, 800)
-glutCreateWindow(b"System Solar 3D")
+glutCreateWindow(b"System Solar 3D - by KADAFI Ben")
 
 # Initialisation
 solar_system = SolarSystem()
